@@ -12,10 +12,40 @@ st.set_page_config(page_title="Consulta Clientes Pirâmide Q425", layout="center
 # =========================
 # LER CONFIGURAÇÕES DO SECRETS
 # =========================
-auth = st.secrets.get("auth", None)
-if not auth:
-    st.error("Arquivo .streamlit/secrets.toml não encontrado ou inválido.")
-    st.stop()
+# -- secrets loader (Render / environment safe) --
+import os
+
+def load_auth_from_env():
+    """
+    Lê a variável de ambiente STREAMLIT_SECRETS (conteúdo TOML).
+    Retorna dicionário equivalente a st.secrets["auth"] se encontrado,
+    ou None.
+    """
+    s = os.environ.get("STREAMLIT_SECRETS")
+    if not s:
+        return None
+
+    # tenta usar tomllib (Python 3.11+), senão tenta a lib 'toml'
+    try:
+        import tomllib as _toml
+        parsed = _toml.loads(s)
+    except (ModuleNotFoundError, AttributeError):
+        try:
+            import toml as _toml  # pip install toml se necessário
+            parsed = _toml.loads(s)
+        except Exception as e:
+            print("Erro ao parsear STREAMLIT_SECRETS:", e)
+            return None
+
+    auth = parsed.get("auth") if isinstance(parsed, dict) else None
+    return auth
+
+# usa env primeiro, senão st.secrets
+env_auth = load_auth_from_env()
+if env_auth is not None:
+    auth = env_auth
+else:
+    auth = st.secrets.get("auth", None)
 
 usernames = auth.get("usernames", [])
 hashed_passwords = auth.get("passwords", [])
