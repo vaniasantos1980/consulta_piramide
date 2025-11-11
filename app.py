@@ -1,17 +1,9 @@
-# app.py
+# app.py (versão corrigida — formatação BRL robusta)
 import os
 import re
 import streamlit as st
 import pandas as pd
 import bcrypt
-import locale
-
-# Define localidade BR para formatação monetária
-try:
-    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-except:
-    # fallback para sistemas Windows
-    locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
 
 pd.options.display.float_format = "{:,.2f}".format
 
@@ -123,12 +115,26 @@ else:
 def only_digits(s):
     return re.sub(r'\D', '', str(s))
 
-# Função para formatar moeda BRL corretamente
+# Função robusta para formatar moeda BRL sem depender de locale instalado
 def format_brl(value):
+    """
+    Retorna string no formato R$ 18.519,14
+    Funciona mesmo se locale não estiver disponível.
+    """
     try:
-        return locale.currency(value, grouping=True)
+        # aceita ints e floats
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return ""
+        v = float(value)
     except Exception:
-        return f"R$ {value:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+        # se não é número, retorna como string
+        return str(value) if value is not None else ""
+
+    # usa formatação padrão (padrão inglês: 18,519.14) e troca separadores
+    s = f"{v:,.2f}"         # ex: 18,519.14
+    # trocas: 18,519.14 -> 18.519,14
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
 
 # =========================
 # BUSCA DE CLIENTES
@@ -167,7 +173,7 @@ if st.button("Buscar"):
 
             display_df = resultado.copy()
 
-            # Mantém CNPJ e COD_JC como texto
+            # Mantém CNPJ e COD_JC como texto (para não remover zeros à esquerda)
             for c in ["CNPJ", "COD_JC"]:
                 if c in display_df.columns:
                     display_df[c] = display_df[c].astype(str)
@@ -178,18 +184,23 @@ if st.button("Buscar"):
             vendas_cols = vendas1 + vendas2
 
             for c in vendas_cols:
-                display_df[c] = display_df[c].apply(
-                    lambda x: format_brl(x) if pd.notna(x) and isinstance(x, (int, float)) else ("" if pd.isna(x) else str(x))
-                )
+                if c in display_df.columns:
+                    display_df[c] = display_df[c].apply(
+                        lambda x: format_brl(x) if pd.notna(x) and isinstance(x, (int, float)) else ("" if pd.isna(x) else str(x))
+                    )
 
-            # Listas de colunas para exibição
+            # Limpa CNPJ/COD_JC apenas para comparação se quiser mostrar sem pontuação:
+            # aqui mantemos como texto; se quiser mostrar limpo, desempacote:
+            # display_df["CNPJ"] = display_df["CNPJ"].str.replace(r'[^0-9]', '', regex=True)
+
+            # Listas de colunas para exibição (mantendo posição lógica)
             principais1 = [c for c in ["RAZAO_SOCIAL", "CNPJ", "COD_JC"] if c in display_df.columns]
             principais2 = [c for c in ["FAIXA PEX", "FAIXA SORT", "DGTT", "AMBIENTE"] if c in display_df.columns]
             principais3 = [c for c in ["PERFIL", "GRUPO", "COLIGAÇÃO"] if c in display_df.columns]
             extras1 = [c for c in ["SEGMENTO", "CIDADE"] if c in display_df.columns]
             extras2 = [c for c in ["SUPERVISOR", "VENDEDOR"] if c in display_df.columns]
 
-            # Exibição
+            # Exibição (mantém a ordem e posição das colunas conforme listas)
             if principais1:
                 st.subheader("Informações principais")
                 st.dataframe(display_df[principais1], hide_index=True)
