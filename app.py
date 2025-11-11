@@ -4,6 +4,14 @@ import re
 import streamlit as st
 import pandas as pd
 import bcrypt
+import locale
+
+# Define localidade BR para formatação monetária
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except:
+    # fallback para sistemas Windows
+    locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
 
 pd.options.display.float_format = "{:,.2f}".format
 
@@ -52,7 +60,6 @@ if not auth:
 usernames = auth.get("usernames", [])
 hashed_passwords = auth.get("passwords", [])
 names = auth.get("names", [])
-# cria dicionário usuário -> hash (bytes)
 users = {u: (h.encode("utf-8") if isinstance(h, str) else str(h).encode("utf-8")) for u, h in zip(usernames, hashed_passwords)}
 
 if "logged_in" not in st.session_state:
@@ -98,15 +105,12 @@ DEFAULT_XLSX = "Piramide Q425.xlsx"
 
 @st.cache_data(show_spinner=False)
 def load_excel(path):
-    # força leitura sem alterar tipos (pandas detecta os tipos)
     return pd.read_excel(path)
 
 if os.path.exists(DEFAULT_XLSX):
     try:
         df = load_excel(DEFAULT_XLSX)
-        # padroniza nomes colunas
         df.columns = df.columns.str.strip().str.upper()
-        # NÃO alterar dtypes originais no df
     except Exception as e:
         st.error(f"Erro ao ler o arquivo '{DEFAULT_XLSX}': {e}")
         st.stop()
@@ -115,9 +119,16 @@ else:
     st.stop()
 
 # -------------------------
-# Helper: limpa (apenas para comparação) mantendo original para exibição
+# Helper: limpa dígitos (para busca)
 def only_digits(s):
     return re.sub(r'\D', '', str(s))
+
+# Função para formatar moeda BRL corretamente
+def format_brl(value):
+    try:
+        return locale.currency(value, grouping=True)
+    except Exception:
+        return f"R$ {value:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
 
 # =========================
 # BUSCA DE CLIENTES
@@ -140,11 +151,8 @@ if st.button("Buscar"):
     elif coluna not in df.columns:
         st.error(f"A coluna '{coluna}' não existe na planilha.")
     else:
-        # usa cópia para operação de busca (sem tocar no df original)
         work = df.copy()
 
-        # Busca: se for CNPJ/COD_JC usamos versão limpa para comparar,
-        # mas não alteramos os valores exibidos
         if coluna in ["CNPJ", "COD_JC"]:
             work[coluna + "_LIMPO"] = work[coluna].astype(str).apply(only_digits)
             termo_limpo = only_digits(termo)
@@ -157,44 +165,36 @@ if st.button("Buscar"):
         else:
             st.success(f"{len(resultado)} resultado(s) encontrado(s).")
 
-            # Cópia apenas para exibição (mantém a ordem original das colunas)
             display_df = resultado.copy()
 
-            # --- Formatações para exibição sem alterar df original ---
-            # 1) Mantém CNPJ e COD_JC como texto (preserva zeros à esquerda).
+            # Mantém CNPJ e COD_JC como texto
             for c in ["CNPJ", "COD_JC"]:
                 if c in display_df.columns:
                     display_df[c] = display_df[c].astype(str)
 
-            # 2) Formata apenas as colunas de vendas como moeda BRL com 2 casas decimais
+            # Formata colunas de vendas em BRL
             vendas1 = [c for c in ["POTENCIAL", "OPORT_AGO", "OPORT_SET", "MD_TRI_COLG", "REAL_MES_COLG"] if c in display_df.columns]
             vendas2 = [c for c in ["MD_TRI_3M", "REAL_MES_3M", "MD_TRI_JC", "REAL_MES_JC"] if c in display_df.columns]
             vendas_cols = vendas1 + vendas2
 
             for c in vendas_cols:
-                # converte valores numéricos para string formatada "R$ 1,234.56" e mantém empty se NA
-                display_df[c] = display_df[c].apply(lambda x: f"R$ {x:,.2f}" if pd.notna(x) and isinstance(x, (int, float)) else ("" if pd.isna(x) else str(x)))
+                display_df[c] = display_df[c].apply(
+                    lambda x: format_brl(x) if pd.notna(x) and isinstance(x, (int, float)) else ("" if pd.isna(x) else str(x))
+                )
 
-            # 3) Opcional: outras colunas numéricas que não são vendas -- não alteramos aqui
-            # Se quiser formatar qualquer outra coluna especifica, inclua aqui.
-
-            # --- Listas de colunas para exibição (mantendo ordem e posicionamento desejado) ---
+            # Listas de colunas para exibição
             principais1 = [c for c in ["RAZAO_SOCIAL", "CNPJ", "COD_JC"] if c in display_df.columns]
             principais2 = [c for c in ["FAIXA PEX", "FAIXA SORT", "DGTT", "AMBIENTE"] if c in display_df.columns]
             principais3 = [c for c in ["PERFIL", "GRUPO", "COLIGAÇÃO"] if c in display_df.columns]
-
             extras1 = [c for c in ["SEGMENTO", "CIDADE"] if c in display_df.columns]
             extras2 = [c for c in ["SUPERVISOR", "VENDEDOR"] if c in display_df.columns]
 
-            # Exibição: usamos as listas acima para garantir ordem fixa dos blocos e das colunas
+            # Exibição
             if principais1:
                 st.subheader("Informações principais")
                 st.dataframe(display_df[principais1], hide_index=True)
-
             if principais2:
-                # mantenho o segundo bloco de principais logo abaixo
                 st.dataframe(display_df[principais2], hide_index=True)
-
             if principais3:
                 st.dataframe(display_df[principais3], hide_index=True)
 
