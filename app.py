@@ -158,8 +158,9 @@ if st.button("Buscar"):
                     display_df[c] = display_df[c].astype(str).str.replace(r'[^0-9]', '', regex=True)
 
             # Seções de exibição
-            principais1 = [c for c in ["RAZAO_SOCIAL", "CNPJ", "COD_JC", "FAIXA PEX", "FAIXA SORT", "DGTT"] if c in display_df.columns]
-            principais2 = [c for c in ["AMBIENTE", "PERFIL", "GRUPO", "COLIGAÇÃO"] if c in display_df.columns]
+            principais1 = [c for c in ["RAZAO_SOCIAL", "CNPJ", "COD_JC"] if c in display_df.columns]
+            principais2 = [c for c in ["FAIXA PEX", "FAIXA SORT", "DGTT","AMBIENTE"] if c in display_df.columns]
+            principais3 = [c for c in ["PERFIL", "GRUPO", "COLIGAÇÃO"] if c in display_df.columns]
             vendas1 = [c for c in ["POTENCIAL", "OPORT_AGO", "OPORT_SET", "MD_TRI_COLG", "REAL_MES_COLG"] if c in display_df.columns]
             vendas2 = [c for c in ["MD_TRI_3M", "REAL_MES_3M", "MD_TRI_JC", "REAL_MES_JC"] if c in display_df.columns]
             extras1 = [c for c in ["SEGMENTO", "CIDADE"] if c in display_df.columns]
@@ -171,6 +172,8 @@ if st.button("Buscar"):
                 st.dataframe(display_df[principais1], hide_index=True)
             if principais2:
                 st.dataframe(display_df[principais2], hide_index=True)
+            if principais3:
+                st.dataframe(display_df[principais3], hide_index=True)
 
             if vendas1:
                 st.subheader("Resumo vendas")
